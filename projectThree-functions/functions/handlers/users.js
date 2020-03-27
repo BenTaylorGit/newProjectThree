@@ -5,7 +5,7 @@ const config = require('../util/config');
 const firebase = require('firebase');
 firebase.initializeApp(config);
 
-const {validateSignUpData, validateLoginData} = require ('../util/validators')
+const {validateSignUpData, validateLoginData, reduceUserDetails} = require ('../util/validators')
 
 exports.signUp = (req, res) => {
     const newUser = {
@@ -86,6 +86,42 @@ exports.signUp = (req, res) => {
         if(err.code === 'auth/wrong-password'){
             return res.status(403).json({general: 'Wrong credentials, please try again'});
         }else return res.status(500).json({error: err.code});
+    });
+};
+
+exports.addUserDetails = (req, res) => {
+    let userDetails = reduceUserDetails(req.body);
+  
+    db.doc(`/users/${req.user.handle}`)
+      .update(userDetails)
+      .then(() => {
+        return res.json({ message: 'Details added successfully' });
+      })
+      .catch((err) => {
+        console.error(err);
+        return res.status(500).json({ error: err.code });
+      });
+  };
+
+exports.getAuthenticatedUser = (req, res) =>{
+    let userData = {};
+    db.doc(`users/${req.user.handle}`).get()
+    .then((doc) =>{
+        if(doc.exists){
+            userData.credentials = doc.data();
+            return db.collection('likes').where('userHandle', '==', req.user.handle).get();
+        }
+    })
+    .then((data) => {
+        userData.likes = [];
+        data.forEach((doc) =>{
+            userData.likes.push(doc.data());
+        });
+        return res.json(userData);
+    })
+    .catch((err) =>{
+        console.error(err);
+        return res.status(500).json({error: err.code});
     });
 };
 
