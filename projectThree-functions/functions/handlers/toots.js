@@ -34,12 +34,18 @@ exports.getAllToots = (req, res) => {
   const newToot = {
     body: req.body.body,
     userHandle: req.user.handle,
-    createdAt: new Date().toISOString()
+    userImage: req.user.imageUrl,
+    createdAt: new Date().toISOString(),
+    likeCount: 0,
+    commentCount: 0
   };
+
   db.collection("toots")
     .add(newToot)
     .then((doc) => {
-      res.json({ message: `document ${doc.id} created successfully` });
+      const resToot = newToot;
+      resToot.tootId = doc.id;
+      res.json(resToot);
     })
     .catch((err) => {
       res.status(500).json({ error: `something went wrong` });
@@ -56,7 +62,7 @@ exports.getToot = (req, res) => {
     }
     tootData = doc.data();
     tootData.tootId = doc.id;
-    return db.collection('comments').where('screamId', '==', req.params.tootId).get();
+    return db.collection('comments').orderBy('createdAt', 'desc').where('tootId', '==', req.params.tootId).get();
   })
   .then((data) =>{
     tootData.comments = [];
@@ -88,6 +94,10 @@ exports.commentOnToot = (req, res) => {
     if(!doc.exists){
       return res.status(404).json({error: 'Toot not found'});
     }
+    return doc.ref.update({commentCount: doc.data().commentCount +1});
+    
+  })
+  .then(() =>{
     return db.collection('comments').add(newComment);
   })
   .then(() =>{
@@ -97,4 +107,118 @@ exports.commentOnToot = (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong' });
   });
-}
+};
+
+exports.likeToot = (req, res) => {
+  const likeDocument = db
+    .collection('likes')
+    .where('userHandle', '==', req.user.handle)
+    .where('tootId', '==', req.params.tootId)
+    .limit(1);
+
+  const tootDocument = db.doc(`/toots/${req.params.tootId}`);
+
+  let tootData;
+
+  tootDocument
+    .get()
+    .then((doc) => {
+      if (doc.exists) {
+        tootData = doc.data();
+        tootData.tootId = doc.id;
+        return likeDocument.get();
+      } else {
+        return res.status(404).json({ error: 'toot not found' });
+      }
+    })
+    .then((data) => {
+      if (data.empty) {
+        return db
+          .collection('likes')
+          .add({
+            tootId: req.params.tootId,
+            userHandle: req.user.handle
+          })
+          .then(() => {
+            tootData.likeCount++;
+            return tootDocument.update({ likeCount: tootData.likeCount });
+          })
+          .then(() => {
+            return res.json(tootData);
+          });
+      } else {
+        return res.status(400).json({ error: 'toot already liked' });
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: err.code });
+    });
+};
+
+exports.unlikeToot = (req, res) => {
+  const likeDocument = db
+    .collection('likes')
+    .where('userHandle', '==', req.user.handle)
+    .where('tootId', '==', req.params.tootId)
+    .limit(1);
+
+  const tootDocument = db.doc(`/toots/${req.params.tootId}`);
+
+  let tootData;
+
+  tootDocument
+    .get()
+    .then((doc) => {
+      if (doc.exists) {
+        tootData = doc.data();
+        tootData.tootId = doc.id;
+        return likeDocument.get();
+      } else {
+        return res.status(404).json({ error: 'toot not found' });
+      }
+    })
+    .then((data) => {
+      if (data.empty) {
+        return res.status(400).json({ error: 'toot not liked' });
+      } else {
+        return db
+          .doc(`/likes/${data.docs[0].id}`)
+          .delete()
+          .then(() => {
+            tootData.likeCount--;
+            return tootDocument.update({ likeCount: tootData.likeCount });
+          })
+          .then(() => {
+            res.json(tootData);
+          });
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+      res.status(500).json({ error: err.code });
+    });
+};
+
+exports.deleteToot = (req, res) => {
+  const document = db.doc(`/toots/${req.params.tootId}`);
+  document
+    .get()
+    .then((doc) => {
+      if (!doc.exists) {
+        return res.status(404).json({ error: 'toot not found' });
+      }
+      if (doc.data().userHandle !== req.user.handle) {
+        return res.status(403).json({ error: 'Unauthorized' });
+      } else {
+        return document.delete();
+      }
+    })
+    .then(() => {
+      res.json({ message: 'toot deleted successfully' });
+    })
+    .catch((err) => {
+      console.error(err);
+      return res.status(500).json({ error: err.code });
+    });
+};
