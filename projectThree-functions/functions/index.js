@@ -23,11 +23,11 @@ app.get("/toots", (req, res) => {
   db.collection("toots")
     .orderBy("createdAt", "desc")
     .get()
-    .then(data => {
+    .then((data) => {
       data
-        .forEach(doc => {
+        .forEach((doc) => {
           let toots = [];
-          data.forEach(doc => {
+          data.forEach((doc) => {
             toots.push({
               tootId: doc.id,
               body: doc.data().body,
@@ -37,7 +37,9 @@ app.get("/toots", (req, res) => {
           });
           return res.json(toots);
         })
-        .catch(err => console.error(err));
+        .catch((err) => {
+            console.error(err);
+        });
     });
 });
 
@@ -49,14 +51,25 @@ app.post("/toot", (req, res) => {
   };
   db.collection("toots")
     .add(newToot)
-    .then(doc => {
+    .then((doc) => {
       res.json({ message: `document ${doc.id} created successfully` });
     })
-    .catch(err => {
+    .catch((err) => {
       res.status(500).json({ error: `something went wrong` });
       console.error(err);
     });
 });
+
+const isEmail = (email) => {
+  const regEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  if (email.match(regEx)) return true;
+  else return false;
+};
+
+const isEmpty = (string) => {
+  if (string.trim() === "") return true;
+  else return false;
+};
 
 app.post("/signup", (req, res) => {
   const newUser = {
@@ -66,10 +79,25 @@ app.post("/signup", (req, res) => {
     handle: req.body.handle
   };
 
+  let errors = {};
+
+  if (isEmpty(newUser.email)) {
+    errors.email = 'Must not be empty';
+  } else if (!isEmail(newUser.email)) {
+    errors.email = 'Must be a valid email address';
+  }
+
+  if (isEmpty(newUser.password)) errors.password = "Must not be empty";
+  if (newUser.password != newUser.confirmPass)
+    errors.confirmPass = "Passwords must match";
+  if (isEmpty(newUser.handle)) errors.handle = "Must not be empty";
+
+  if (Object.keys(errors).length > 0) return res.status(400).json(errors);
+
   let token, userId;
   db.doc(`/users/${newUser.handle}`)
     .get()
-    .then(doc => {
+    .then((doc) => {
       if (doc.exists) {
         return res.status(400).json({ handle: "this handle is already taken" });
       } else {
@@ -78,11 +106,11 @@ app.post("/signup", (req, res) => {
           .createUserWithEmailAndPassword(newUser.email, newUser.password);
       }
     })
-    .then(data => {
+    .then((data) => {
       userId = data.user.uid;
       return data.user.getIdToken();
     })
-    .then(idToken => {
+    .then((idToken) => {
       token = idToken;
       const userCredentials = {
         handle: newUser.handle,
@@ -95,7 +123,7 @@ app.post("/signup", (req, res) => {
     .then(() => {
       return res.status(201).json({ token });
     })
-    .catch(err => {
+    .catch((err) => {
       console.error(err);
       if (err.code === "auth/email-already-in-use") {
         return res.status(400).json({ email: "email is already in use" });
