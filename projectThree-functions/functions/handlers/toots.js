@@ -46,3 +46,55 @@ exports.getAllToots = (req, res) => {
       console.error(err);
     });
 };
+
+exports.getToot = (req, res) => {
+  let tootData = {};
+  db.doc(`/toots/${req.params.tootId}`).get()
+  .then((doc) =>{
+    if(!doc.exists){
+      return res.status(404).json({error: 'Toot not found'});
+    }
+    tootData = doc.data();
+    tootData.tootId = doc.id;
+    return db.collection('comments').where('screamId', '==', req.params.tootId).get();
+  })
+  .then((data) =>{
+    tootData.comments = [];
+    data.forEach((doc) =>{
+      tootData.comments.push(doc.data())
+    });
+    return res.json(tootData);
+  })
+  .catch((err) => {
+    console.error(err);
+    res.status(500).json({ error: err.code });
+    
+  });
+};
+
+exports.commentOnToot = (req, res) => {
+  if(req.body.body.trim() === '') return res.status(400).json({error: 'Must not be empty'});
+
+  const newComment = {
+    body: req.body.body,
+    createdAt: new Date().toISOString(),
+    tootId: req.params.tootId,
+    userHandle: req.user.handle,
+    userImage: req.user.imageUrl
+  };
+
+  db.doc(`/toots/${req.params.tootId}`).get()
+  .then((doc) =>{
+    if(!doc.exists){
+      return res.status(404).json({error: 'Toot not found'});
+    }
+    return db.collection('comments').add(newComment);
+  })
+  .then(() =>{
+    res.json(newComment);
+  })
+  .catch((err) => {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong' });
+  });
+}

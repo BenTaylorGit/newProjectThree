@@ -4,12 +4,14 @@ const app = require("express")();
 
 const FBAuth = require('./util/fbAuth');
 
-const {getAllToots, postOneToot} = require('./handlers/toots');
+const {getAllToots, postOneToot, getToot, commentOnToot} = require('./handlers/toots');
 const {signUp, login, uploadImage, addUserDetails, getAuthenticatedUser} = require('./handlers/users');
 
 //toot routes
 app.get("/toots", getAllToots);
 app.post("/toot", FBAuth, postOneToot);
+app.get("/toot/:tootId", getToot);
+app.post('/toot/:tootId/comment', FBAuth, commentOnToot)
 
 
 //Users Route
